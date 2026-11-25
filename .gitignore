@@ -1,0 +1,6 @@
+*.app
+build/
+.DS_Store
+CLAUDE.md
+ETAT.md
+maquettes/
