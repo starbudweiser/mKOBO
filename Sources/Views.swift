@@ -146,6 +146,21 @@ struct Sidebar: View {
                     section(L.t("side.sources")) {
                         VStack(spacing: 0) { ForEach(SourceID.allCases) { sourceRow($0) } }.padding(6).surface(radius: M.radius, fill: Theme.solid)
                     }
+                    section(L.t("side.stores")) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Button { Store.openKoboStore(store.query) } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "bag").font(.system(size: 12, weight: .semibold))
+                                    Text(L.t("store.kobo")).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
+                                    Spacer(minLength: 0)
+                                    Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.text2)
+                                }
+                                .padding(.horizontal, 10).frame(height: 32).frame(maxWidth: .infinity)
+                                .background(Capsule().fill(Theme.fill)).contentShape(Capsule())
+                            }.buttonStyle(.plain)
+                            Text(L.t("store.koboHelp")).font(.system(size: 11)).foregroundStyle(Theme.text2).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                     section(L.t("side.langs")) {
                         FlowChips {
                             ChipView(text: L.t("lang.all"), on: store.langs.isEmpty) { store.langs = [] }

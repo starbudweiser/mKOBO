@@ -171,6 +171,26 @@ extension Store {
         }
     }
 
+    /// BD en images : télécharge chaque page puis les range dans un CBZ (001.jpg, 002.jpg…).
+    private func buildComic(_ pages: [URL], id: UUID, temps: inout [URL]) async throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("mKOBO-cbz-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        temps.append(dir)
+        for (i, u) in pages.enumerated() {
+            let tmp = try await Downloader.shared.download(u, ext: "jpg") { _ in }
+            try FileManager.default.moveItem(at: tmp, to: dir.appendingPathComponent(String(format: "%03d.", i + 1) + (u.pathExtension.isEmpty ? "jpg" : u.pathExtension)))
+            update(id) { $0.progress = Double(i + 1) / Double(pages.count) }
+        }
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".cbz")
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+        p.currentDirectoryURL = dir
+        p.arguments = ["-q", "-0", "-r", out.path, "."]
+        try p.run(); p.waitUntilExit()
+        guard p.terminationStatus == 0 else { throw JobError.badFile }
+        return out
+    }
+
     private func run(_ job: Job) async {
         let id = job.id
         update(id) { $0.stage = .resolving }
@@ -181,7 +201,12 @@ extension Store {
             if job.book.lazyFiles { files = try await Providers.provider(job.book.source).files(for: job.book) }
             guard let opt = Self.pick(files, for: job.dest) else { throw JobError.noFile }
             update(id) { $0.stage = .download }
-            var file = try await Downloader.shared.download(opt.url, ext: opt.ext) { p in Task { @MainActor in self.update(id) { $0.progress = p } } }
+            var file: URL
+            if opt.parts.isEmpty {
+                file = try await Downloader.shared.download(opt.url, ext: opt.ext) { p in Task { @MainActor in self.update(id) { $0.progress = p } } }
+            } else {
+                file = try await buildComic(opt.parts, id: id, temps: &temps)
+            }
             temps.append(file)
             if opt.ext == "epub" || opt.ext == "cbz" || opt.ext == "zip" || opt.ext == "cbr" {
                 let head = try FileHandle(forReadingFrom: file).read(upToCount: 4) ?? Data()

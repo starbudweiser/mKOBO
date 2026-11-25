@@ -9,7 +9,7 @@ enum Kind: String, CaseIterable, Identifiable, Sendable {
 }
 
 enum SourceID: String, CaseIterable, Identifiable, Sendable {
-    case gutenberg, wikisource, archive, librivox, beq
+    case gutenberg, wikisource, archive, librivox, beq, pepper
     var id: String { rawValue }
     var name: String {
         switch self {
@@ -17,16 +17,18 @@ enum SourceID: String, CaseIterable, Identifiable, Sendable {
         case .wikisource: "Wikisource"
         case .archive: "Internet Archive"
         case .librivox: "LibriVox"
-        case .beq: "Bibliothèque électronique du Québec"
+        case .beq: "BEQ · Québec"
+        case .pepper: "Pepper&Carrot"
         }
     }
-    var kinds: [Kind] { switch self { case .gutenberg, .wikisource: [.book]; case .archive: [.book, .comic]; case .librivox: [.audio]; case .beq: [.book] } }
+    var kinds: [Kind] { switch self { case .gutenberg, .wikisource: [.book]; case .archive: [.book, .comic]; case .librivox: [.audio]; case .beq: [.book]; case .pepper: [.comic] } }
     var home: URL { switch self {
         case .gutenberg: URL(string: "https://www.gutenberg.org")!
         case .wikisource: URL(string: "https://wikisource.org")!
         case .archive: URL(string: "https://archive.org")!
         case .librivox: URL(string: "https://librivox.org")!
-        case .beq: URL(string: "https://beq.ebooksgratuits.com")! } }
+        case .beq: URL(string: "https://beq.ebooksgratuits.com")!
+        case .pepper: URL(string: "https://www.peppercarrot.com")! } }
 }
 
 /// Fichier téléchargeable d'un livre.
@@ -36,6 +38,7 @@ struct FileOption: Identifiable, Hashable, Sendable {
     var ext: String             // epub, cbz, pdf, zip
     var url: URL
     var size: Int64?
+    var parts: [URL] = []       // BD en images : pages à télécharger puis assembler en CBZ
     var koboReadable: Bool { ["epub", "kepub", "cbz", "cbr", "pdf"].contains(ext) }
 }
 

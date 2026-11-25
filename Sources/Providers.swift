@@ -41,7 +41,7 @@ protocol SourceProvider: Sendable {
 extension SourceProvider { func files(for book: Book) async throws -> [FileOption] { book.files } }
 
 enum Providers {
-    static let all: [SourceProvider] = [GutenbergProvider(), WikisourceProvider(), ArchiveProvider(), LibriVoxProvider(), BEQProvider()]
+    static let all: [SourceProvider] = [GutenbergProvider(), WikisourceProvider(), ArchiveProvider(), LibriVoxProvider(), BEQProvider(), PepperProvider()]
     static func provider(_ id: SourceID) -> SourceProvider { all.first { $0.id == id }! }
 }
 
@@ -283,6 +283,40 @@ struct BEQProvider: SourceProvider {
             guard let u = URL(string: Self.base + "vents-epub/" + (e.file.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? e.file)) else { return nil }
             return Book(id: "beq:" + e.file, title: e.title, author: e.author, kind: .book, language: "fr", summary: "", source: .beq, coverURL: nil,
                         pageURL: URL(string: Self.base + "vents/index.htm"), files: [FileOption(format: "EPUB", ext: "epub", url: u, size: nil)], popularity: 0)
+        }
+    }
+}
+
+
+// MARK: Pepper&Carrot (BD de fantasy de David Revoy, licence libre CC-BY 4.0 ; pages assemblées en CBZ à l'envoi)
+
+struct PepperProvider: SourceProvider {
+    let id = SourceID.pepper
+    private static let base = "https://www.peppercarrot.com/0_sources/"
+
+    func search(query: String, langs: Set<String>, kind: Kind?, page: Int) async throws -> [Book] {
+        if let k = kind, k != .comic { return [] }
+        if page > 1 { return [] }
+        let lang = ["fr", "en", "es", "it"].first { langs.isEmpty || langs.contains($0) } ?? "fr"
+        guard let data = try? await Net.session.data(from: URL(string: Self.base + "episodes-v1.json")!).0,
+              let episodes = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { throw NetError.format }
+        func fold(_ s: String) -> String { s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil) }
+        let words = fold(query).split(separator: " ").map(String.init)
+        return episodes.compactMap { e in
+            guard let name = e["name"] as? String, let pages = e["pages"] as? [String: String] else { return nil }
+            let parts = name.split(separator: "_", maxSplits: 1).map(String.init)
+            let number = Int(parts.first?.dropFirst(2) ?? "") ?? 0
+            let title = "Pepper&Carrot " + String(format: "%02d", number) + " — " + (parts.count > 1 ? parts[1].replacingOccurrences(of: "-", with: " ") : name)
+            guard words.allSatisfy({ fold(title + " David Revoy").contains($0) }) else { return nil }
+            let numbered = pages.keys.compactMap { Int($0) }.sorted().compactMap { pages[String($0)] }
+            let ordered = ([pages["title"]] + numbered.map { Optional($0) } + [pages["credits"]]).compactMap { $0 }
+            let urls = ordered.compactMap { URL(string: Self.base + name + "/low-res/" + lang + "_" + $0) }
+            guard let first = urls.first else { return nil }
+            return Book(id: "pepper:\(name):\(lang)", title: title, author: "David Revoy", kind: .comic, language: lang,
+                        summary: "BD libre de David Revoy (licence CC-BY 4.0) — peppercarrot.com", year: "", source: .pepper,
+                        coverURL: pages["cover"].flatMap { URL(string: Self.base + name + "/low-res/" + $0) },
+                        pageURL: URL(string: "https://www.peppercarrot.com/" + lang + "/webcomic/" + name.replacingOccurrences(of: "_", with: "__") + ".html"),
+                        files: [FileOption(format: "CBZ", ext: "cbz", url: first, size: nil, parts: urls)], popularity: 1000 - number)
         }
     }
 }

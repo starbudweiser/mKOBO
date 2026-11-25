@@ -59,6 +59,7 @@ enum SelfTest {
             picks.append(Book(id: "gutenberg:164", title: "Vingt mille lieues sous les mers", author: "Jules Verne", kind: .book, language: "fr", summary: "", source: .gutenberg, coverURL: nil, pageURL: nil,
                               files: [FileOption(format: "EPUB", ext: "epub", url: URL(string: "https://www.gutenberg.org/ebooks/164.epub3.images")!, size: nil)], popularity: 0))
         }
+        if let b = (try? await Providers.provider(.pepper).search(query: "potion of flight", langs: ["fr"], kind: nil, page: 1))?.first { picks.append(b) }
         for b in picks { store.selection[b.id] = b }
         print("Envoi de \(picks.count) titres vers \(drive.path)")
         store.send(to: .drive)

@@ -1,4 +1,5 @@
 // mKOBO — état de l'appli : recherche dans les sources, sélection, envois.
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -92,6 +93,15 @@ final class Store: ObservableObject {
             if let at = seen[b.mergeKey] { out[at].alternatives.append(b) } else { seen[b.mergeKey] = out.count; out.append(b) }
         }
         books = out
+    }
+
+    /// Boutique officielle Kobo (Rakuten) : recherche ouverte dans le navigateur, où l'utilisateur est connecté à son compte.
+    static func openKoboStore(_ query: String) {
+        let region = ["fr": "fr/fr", "en": "us/en", "es": "es/es", "it": "it/it"][L.code] ?? "us/en"
+        var c = URLComponents(string: "https://www.kobo.com/\(region)/search")!
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !q.isEmpty { c.queryItems = [URLQueryItem(name: "query", value: q)] }
+        if let u = c.url { NSWorkspace.shared.open(u) }
     }
 
     func toggle(_ b: Book) { if selection[b.id] != nil { selection[b.id] = nil } else { selection[b.id] = b } }
