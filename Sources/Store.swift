@@ -11,6 +11,10 @@ final class Store: ObservableObject {
     @Published var query = ""
     @Published private(set) var books: [Book] = []
     @Published private(set) var loading = false
+    @Published private(set) var loadingMore = false
+    @Published private(set) var canLoadMore = false
+    private var page = 1
+    private var exhausted: Set<SourceID> = []
     @Published private(set) var sourceError: [SourceID: String] = [:]
     @Published private(set) var sourceCount: [SourceID: Int] = [:]
     @Published var enabled: Set<SourceID> = Prefs.sources { didSet { Prefs.sources = enabled } }
@@ -38,13 +42,13 @@ final class Store: ObservableObject {
     func search() async {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         loading = true
-        sourceError = [:]; raw = [:]; sourceCount = [:]
+        sourceError = [:]; raw = [:]; sourceCount = [:]; page = 1; exhausted = []; canLoadMore = false
         let langs = self.langs
         let providers = Providers.all.filter { enabled.contains($0.id) }
         await withTaskGroup(of: (SourceID, [Book]?, String?).self) { group in
             for p in providers {
                 group.addTask {
-                    do { return (p.id, try await p.search(query: q, langs: langs, kind: nil), nil) }
+                    do { return (p.id, try await p.search(query: q, langs: langs, kind: nil, page: 1), nil) }
                     catch { return (p.id, nil, error is CancellationError ? nil : error.localizedDescription) }
                 }
             }
@@ -55,7 +59,25 @@ final class Store: ObservableObject {
                 rebuild()
             }
         }
-        if !Task.isCancelled { loading = false }
+        if !Task.isCancelled { loading = false; canLoadMore = !raw.isEmpty }
+    }
+
+    /// Page suivante de chaque source (défilement infini : « Afficher plus de résultats »).
+    func loadMore() async {
+        guard !loading, !loadingMore else { return }
+        loadingMore = true
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines), langs = self.langs, next = page + 1
+        let providers = Providers.all.filter { enabled.contains($0.id) && !exhausted.contains($0.id) && raw[$0.id] != nil }
+        await withTaskGroup(of: (SourceID, [Book]).self) { group in
+            for p in providers { group.addTask { (p.id, (try? await p.search(query: q, langs: langs, kind: nil, page: next)) ?? []) } }
+            for await (id, result) in group {
+                let known = Set((raw[id] ?? []).map(\.id))
+                let fresh = result.filter { !known.contains($0.id) }
+                if fresh.isEmpty { exhausted.insert(id) } else { raw[id, default: []] += fresh; sourceCount[id] = raw[id]?.count }
+            }
+        }
+        if !Task.isCancelled { page = next; rebuild(); canLoadMore = Providers.all.contains { enabled.contains($0.id) && raw[$0.id] != nil && !exhausted.contains($0.id) } }
+        loadingMore = false
     }
 
     /// Fusionne les sources : un titre trouvé ailleurs devient une « autre édition », les sources alternent pour que chacune apparaisse.

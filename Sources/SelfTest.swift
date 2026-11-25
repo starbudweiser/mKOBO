@@ -26,7 +26,7 @@ enum SelfTest {
             for query in [q, ""] {
                 let t = Date()
                 do {
-                    let r = try await p.search(query: query, langs: ["fr", "en"], kind: nil)
+                    let r = try await p.search(query: query, langs: ["fr", "en"], kind: nil, page: 1)
                     print("[\(p.id.rawValue)] « \(query) » : \(r.count) résultats en \(String(format: "%.1f", Date().timeIntervalSince(t))) s" + (r.first.map { " — ex. : \($0.title) / \($0.author) (\($0.kind.rawValue), \($0.files.first?.format ?? "fichiers à la demande"))" } ?? ""))
                     if let b = r.first, b.lazyFiles, let f = try? await p.files(for: b) { print("    fichiers de « \(b.title) » : \(f.map { "\($0.format) \($0.size ?? 0)" })") }
                 } catch { print("[\(p.id.rawValue)] « \(query) » : ERREUR \(error.localizedDescription)") }
@@ -36,16 +36,20 @@ enum SelfTest {
 
     /// Envoi complet vers un dossier temporaire jouant le rôle du dossier Google Drive : recherche, téléchargement, copie, contrôle.
     static func runSend() async {
+        for src in [SourceID.gutenberg, .archive, .librivox] {
+            let r = (try? await Providers.provider(src).search(query: "", langs: ["fr"], kind: nil, page: 2)) ?? []
+            print("[\(src.rawValue)] page 2 (fr) : \(r.count) résultats — \(r.first?.title ?? "-")")
+        }
         let drive = FileManager.default.temporaryDirectory.appendingPathComponent("mkobo-test-drive-\(UUID().uuidString.prefix(6))")
         try? FileManager.default.createDirectory(at: drive, withIntermediateDirectories: true)
         Prefs.drivePath = drive.path
         let store = Store.shared
         var picks: [Book] = []
         for (src, q) in [(SourceID.archive, "twenty thousand leagues"), (.librivox, "")] {
-            if let b = (try? await Providers.provider(src).search(query: q, langs: ["en"], kind: nil))?.first, src != .librivox || false { picks.append(b) }
+            if let b = (try? await Providers.provider(src).search(query: q, langs: ["en"], kind: nil, page: 1))?.first, src != .librivox || false { picks.append(b) }
         }
-        if let b = (try? await Providers.provider(.wikisource).search(query: "Le Horla", langs: ["fr"], kind: nil))?.first { picks.append(b) }
-        if let b = (try? await Providers.provider(.gutenberg).search(query: "Vingt mille lieues", langs: ["fr"], kind: nil))?.first { picks.append(b) }
+        if let b = (try? await Providers.provider(.wikisource).search(query: "Le Horla", langs: ["fr"], kind: nil, page: 1))?.first { picks.append(b) }
+        if let b = (try? await Providers.provider(.gutenberg).search(query: "Vingt mille lieues", langs: ["fr"], kind: nil, page: 1))?.first { picks.append(b) }
         else {   // Gutendex indisponible : livre construit à la main (teste le repli sur le miroir si gutenberg.org répond 503)
             picks.append(Book(id: "gutenberg:164", title: "Vingt mille lieues sous les mers", author: "Jules Verne", kind: .book, language: "fr", summary: "", source: .gutenberg, coverURL: nil, pageURL: nil,
                               files: [FileOption(format: "EPUB", ext: "epub", url: URL(string: "https://www.gutenberg.org/ebooks/164.epub3.images")!, size: nil)], popularity: 0))

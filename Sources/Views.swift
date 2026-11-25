@@ -230,7 +230,7 @@ struct DiscoverView: View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 toolbar
-                if store.visible.isEmpty { emptyState } else { ScrollView { gallery.padding(.horizontal, 16).padding(.top, 6).padding(.bottom, store.selection.isEmpty ? 20 : 96) } }
+                if store.visible.isEmpty { emptyState } else { ScrollView { VStack(spacing: 14) { gallery; moreButton }.padding(.horizontal, 16).padding(.top, 6).padding(.bottom, store.selection.isEmpty ? 20 : 96) } }
             }
             if !store.selection.isEmpty { SendBar().padding(14).transition(.move(edge: .bottom).combined(with: .opacity)) }
             if let b = store.inspected {
@@ -299,6 +299,19 @@ struct DiscoverView: View {
                 .foregroundStyle(store.viewMode == mode ? Color.primary : Theme.text2)
                 .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(store.viewMode == mode ? Theme.win : .clear))
         }.buttonStyle(.plain).help(L.t(mode == "grid" ? "view.grid" : "view.list"))
+    }
+
+    @ViewBuilder private var moreButton: some View {
+        if store.canLoadMore {
+            Button { Task { await store.loadMore() } } label: {
+                HStack(spacing: 8) {
+                    if store.loadingMore { ProgressView().controlSize(.small) }
+                    Text(L.t("more.results")).font(.system(size: 12.5, weight: .medium))
+                }
+                .padding(.horizontal, 16).frame(height: 32).background(Capsule().fill(Theme.fill))
+            }
+            .buttonStyle(.plain).disabled(store.loadingMore).padding(.top, 4)
+        }
     }
 
     @ViewBuilder private var gallery: some View {

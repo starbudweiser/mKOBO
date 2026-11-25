@@ -57,6 +57,7 @@ enum L {
         "kind.audio": ["Audio", "Audio", "Audio", "Audio"],
         "view.grid": ["Vignettes", "Thumbnails", "Miniaturas", "Miniature"],
         "view.list": ["Liste", "List", "Lista", "Elenco"],
+        "more.results": ["Afficher plus de résultats", "Show more results", "Mostrar más resultados", "Mostra altri risultati"],
         "empty.loading": ["Recherche en cours…", "Searching…", "Buscando…", "Ricerca in corso…"],
         "empty.none": ["Aucune source activée ou aucun titre disponible.", "No source enabled or no title available.", "Ninguna fuente activada o ningún título disponible.", "Nessuna fonte attiva o nessun titolo disponibile."],
         "empty.comicHint": ["Cherche une BD par titre ou par auteur : seules celles d'avant 1931 (domaine public probable) sont proposées.", "Search for a comic by title or author: only those from before 1931 (likely public domain) are offered.", "Busca un cómic por título o autor: solo se ofrecen los anteriores a 1931 (probable dominio público).", "Cerca un fumetto per titolo o autore: sono proposti solo quelli anteriori al 1931 (probabile pubblico dominio)."],

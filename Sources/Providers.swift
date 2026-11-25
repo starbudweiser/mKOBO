@@ -35,7 +35,7 @@ enum Net {
 
 protocol SourceProvider: Sendable {
     var id: SourceID { get }
-    func search(query: String, langs: Set<String>, kind: Kind?) async throws -> [Book]
+    func search(query: String, langs: Set<String>, kind: Kind?, page: Int) async throws -> [Book]
     func files(for book: Book) async throws -> [FileOption]
 }
 extension SourceProvider { func files(for book: Book) async throws -> [FileOption] { book.files } }
@@ -77,11 +77,12 @@ private func stripHTML(_ s: String) -> String {
 
 struct GutenbergProvider: SourceProvider {
     let id = SourceID.gutenberg
-    func search(query: String, langs: Set<String>, kind: Kind?) async throws -> [Book] {
+    func search(query: String, langs: Set<String>, kind: Kind?, page: Int) async throws -> [Book] {
         if let k = kind, k != .book { return [] }
         var q: [(String, String)] = []
         if !query.isEmpty { q.append(("search", query)) }
         if !langs.isEmpty { q.append(("languages", langs.sorted().joined(separator: ","))) }
+        if page > 1 { q.append(("page", String(page))) }
         let json = try await Net.json(Net.url("https://gutendex.com/books/", q), timeout: 45)   // la recherche de Gutendex est parfois lente
         return (json["results"] as? [[String: Any]] ?? []).prefix(32).compactMap { r in
             let formats = r["formats"] as? [String: String] ?? [:]
@@ -101,13 +102,13 @@ struct GutenbergProvider: SourceProvider {
 
 struct WikisourceProvider: SourceProvider {
     let id = SourceID.wikisource
-    func search(query: String, langs: Set<String>, kind: Kind?) async throws -> [Book] {
+    func search(query: String, langs: Set<String>, kind: Kind?, page: Int) async throws -> [Book] {
         if let k = kind, k != .book { return [] }
         guard !query.isEmpty else { return [] }
         var out: [Book] = []
         for lang in ["fr", "en", "es", "it"] where langs.isEmpty || langs.contains(lang) {
             let url = Net.url("https://\(lang).wikisource.org/w/api.php", [("action", "query"), ("list", "search"), ("srsearch", query),
-                              ("srnamespace", "0"), ("srlimit", "20"), ("srprop", "snippet"), ("format", "json")])
+                              ("srnamespace", "0"), ("srlimit", "20"), ("sroffset", String((page - 1) * 20)), ("srprop", "snippet"), ("format", "json")])
             guard let json = try? await Net.json(url), let hits = (json["query"] as? [String: Any])?["search"] as? [[String: Any]] else { continue }
             for h in hits {
                 let title = str(h["title"])
@@ -129,7 +130,7 @@ struct ArchiveProvider: SourceProvider {
     let id = SourceID.archive
     private static let langCodes = ["fr": "(fre OR French)", "en": "(eng OR English)", "es": "(spa OR Spanish)", "it": "(ita OR Italian)"]
 
-    func search(query: String, langs: Set<String>, kind: Kind?) async throws -> [Book] {
+    func search(query: String, langs: Set<String>, kind: Kind?, page: Int) async throws -> [Book] {
         if kind == .audio { return [] }
         // Livres : EPUB en accès libre. BD : seulement les titres d'avant 1931 (domaine public probable) et seulement sur une recherche,
         // jamais en accueil : l'Internet Archive héberge aussi des BD récentes déposées par des internautes.
@@ -142,7 +143,7 @@ struct ArchiveProvider: SourceProvider {
         if !ls.isEmpty { q += " AND language:(" + ls.joined(separator: " OR ") + ")" }
         let clean = query.replacingOccurrences(of: "\"", with: " ").replacingOccurrences(of: "(", with: " ").replacingOccurrences(of: ")", with: " ")
         if !clean.trimmingCharacters(in: .whitespaces).isEmpty { q += " AND (title:(\(clean)) OR creator:(\(clean)))" }
-        var items: [(String, String)] = [("q", q), ("rows", "40"), ("sort[]", "downloads desc"), ("output", "json")]
+        var items: [(String, String)] = [("q", q), ("rows", "40"), ("page", String(page)), ("sort[]", "downloads desc"), ("output", "json")]
         for f in ["identifier", "title", "creator", "language", "format", "downloads", "description", "year"] { items.append(("fl[]", f)) }
         let json = try await Net.json(Net.url("https://archive.org/advancedsearch.php", items))
         if let e = json["error"] { throw NSError(domain: "archive.org", code: 1, userInfo: [NSLocalizedDescriptionKey: str(e)]) }
@@ -186,13 +187,14 @@ struct LibriVoxProvider: SourceProvider {
         do { return (try await Net.json(url))["books"] as? [[String: Any]] ?? [] } catch NetError.http(404) { return [] }
     }
 
-    func search(query: String, langs: Set<String>, kind: Kind?) async throws -> [Book] {
+    func search(query: String, langs: Set<String>, kind: Kind?, page: Int) async throws -> [Book] {
         if let k = kind, k != .audio { return [] }
         var rows: [[String: Any]]
-        if query.isEmpty { rows = try await fetch([]) }
+        let off: [(String, String)] = page > 1 ? [("offset", String((page - 1) * 40))] : []
+        if query.isEmpty { rows = try await fetch(off) }
         else {
-            async let byTitle = fetch([("title", "^" + query)])
-            async let byAuthor = fetch([("author", "^" + query)])
+            async let byTitle = fetch([("title", "^" + query)] + off)
+            async let byAuthor = fetch([("author", "^" + query)] + off)
             rows = try await byTitle
             let seen = Set(rows.map { str($0["id"]) })
             rows += (try await byAuthor).filter { !seen.contains(str($0["id"])) }
