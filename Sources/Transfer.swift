@@ -32,7 +32,23 @@ final class Downloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendabl
         session = URLSession(configuration: c, delegate: self, delegateQueue: nil)
     }
 
+    /// Project Gutenberg : si gutenberg.org est en maintenance (503), repli sur le miroir officiel pglaf.org.
+    static func gutenbergMirror(_ url: URL) -> URL? {
+        guard url.host?.hasSuffix("gutenberg.org") == true else { return nil }
+        let id = url.path.range(of: #"(?<=ebooks/)\d+|(?<=epub/)\d+"#, options: .regularExpression).map { String(url.path[$0]) }
+        guard let id, !id.isEmpty, id.allSatisfy(\.isNumber) else { return nil }
+        return URL(string: "https://gutenberg.pglaf.org/cache/epub/\(id)/pg\(id)-images.epub")
+    }
+
     func download(_ url: URL, ext: String, progress: @escaping (Double) -> Void) async throws -> URL {
+        do { return try await fetch(url, ext: ext, progress: progress) }
+        catch {
+            guard let mirror = Self.gutenbergMirror(url) else { throw error }
+            return try await fetch(mirror, ext: ext, progress: progress)
+        }
+    }
+
+    private func fetch(_ url: URL, ext: String, progress: @escaping (Double) -> Void) async throws -> URL {
         try await withCheckedThrowingContinuation { cont in
             let t = session.downloadTask(with: url)
             lock.lock(); handlers[t.taskIdentifier] = (progress, cont, ext); lock.unlock()

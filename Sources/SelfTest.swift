@@ -45,6 +45,11 @@ enum SelfTest {
             if let b = (try? await Providers.provider(src).search(query: q, langs: ["en"], kind: nil))?.first, src != .librivox || false { picks.append(b) }
         }
         if let b = (try? await Providers.provider(.wikisource).search(query: "Le Horla", langs: ["fr"], kind: nil))?.first { picks.append(b) }
+        if let b = (try? await Providers.provider(.gutenberg).search(query: "Vingt mille lieues", langs: ["fr"], kind: nil))?.first { picks.append(b) }
+        else {   // Gutendex indisponible : livre construit à la main (teste le repli sur le miroir si gutenberg.org répond 503)
+            picks.append(Book(id: "gutenberg:164", title: "Vingt mille lieues sous les mers", author: "Jules Verne", kind: .book, language: "fr", summary: "", source: .gutenberg, coverURL: nil, pageURL: nil,
+                              files: [FileOption(format: "EPUB", ext: "epub", url: URL(string: "https://www.gutenberg.org/ebooks/164.epub3.images")!, size: nil)], popularity: 0))
+        }
         for b in picks { store.selection[b.id] = b }
         print("Envoi de \(picks.count) titres vers \(drive.path)")
         store.send(to: .drive)

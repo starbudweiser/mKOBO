@@ -68,7 +68,7 @@ final class DeviceMonitor: ObservableObject {
     }
 
     nonisolated static func detect() -> KoboDevice? {
-        let keys: [URLResourceKey] = [.volumeAvailableCapacityForImportantUsageKey, .volumeTotalCapacityKey]
+        let keys: [URLResourceKey] = [.volumeAvailableCapacityForImportantUsageKey, .volumeAvailableCapacityKey, .volumeTotalCapacityKey]
         for v in FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: keys, options: [.skipHiddenVolumes]) ?? [] {
             let versionFile = v.appendingPathComponent(".kobo/version")
             guard let text = try? String(contentsOf: versionFile, encoding: .utf8) else { continue }
@@ -78,7 +78,7 @@ final class DeviceMonitor: ObservableObject {
             let model = models[String(serial.prefix(4))] ?? "Kobo"
             let fw = f.first { $0.range(of: #"^\d+\.\d+\.\d+$"#, options: .regularExpression) != nil && $0.split(separator: ".").first.map { Int($0)! > 3 } == true } ?? ""
             let rv = try? v.resourceValues(forKeys: Set(keys))
-            return KoboDevice(volume: v, model: model, firmware: fw, free: Int64(rv?.volumeAvailableCapacityForImportantUsage ?? 0), total: Int64(rv?.volumeTotalCapacity ?? 0))
+            return KoboDevice(volume: v, model: model, firmware: fw, free: Int64(rv?.volumeAvailableCapacityForImportantUsage ?? 0) > 0 ? Int64(rv?.volumeAvailableCapacityForImportantUsage ?? 0) : Int64(rv?.volumeAvailableCapacity ?? 0), total: Int64(rv?.volumeTotalCapacity ?? 0))
         }
         return nil
     }
