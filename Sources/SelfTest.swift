@@ -79,6 +79,12 @@ enum SelfTest {
         Task {
             for _ in 0..<40 { try? await Task.sleep(nanoseconds: 500_000_000); if !store.books.isEmpty && !store.loading { break } }
             if let n = arg("--select").flatMap(Int.init) { for b in store.books.prefix(n) { store.selection[b.id] = b } }
+            if CommandLine.arguments.contains("--store") {
+                store.query = ""; store.openKoboStore()
+                try? await Task.sleep(nanoseconds: 8_000_000_000)
+                let t = try? await store.browser.webView.evaluateJavaScript("document.title + ' | ' + document.body.innerText.slice(0, 160).replace(/\\s+/g, ' ')")
+                print("boutique : \(store.browser.url) → \(t ?? "?")")
+            }
             if CommandLine.arguments.contains("--inspect") { store.inspected = store.visible.first }
             try? await Task.sleep(nanoseconds: 3_500_000_000)
             if let w = arg("--window") {

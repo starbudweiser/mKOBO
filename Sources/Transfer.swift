@@ -202,7 +202,11 @@ extension Store {
             guard let opt = Self.pick(files, for: job.dest) else { throw JobError.noFile }
             update(id) { $0.stage = .download }
             var file: URL
-            if opt.parts.isEmpty {
+            if opt.url.isFileURL {   // fichier déjà téléchargé depuis la boutique
+                let copy = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "." + opt.ext)
+                try FileManager.default.copyItem(at: opt.url, to: copy)
+                file = copy
+            } else if opt.parts.isEmpty {
                 file = try await Downloader.shared.download(opt.url, ext: opt.ext) { p in Task { @MainActor in self.update(id) { $0.progress = p } } }
             } else {
                 file = try await buildComic(opt.parts, id: id, temps: &temps)

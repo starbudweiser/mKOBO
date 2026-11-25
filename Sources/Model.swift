@@ -9,7 +9,9 @@ enum Kind: String, CaseIterable, Identifiable, Sendable {
 }
 
 enum SourceID: String, CaseIterable, Identifiable, Sendable {
-    case gutenberg, wikisource, archive, librivox, beq, pepper
+    case gutenberg, wikisource, archive, librivox, beq, pepper, local
+    /// Sources de recherche (« local » = fichier téléchargé depuis la boutique, jamais proposé dans la liste).
+    static var catalog: [SourceID] { allCases.filter { $0 != .local } }
     var id: String { rawValue }
     var name: String {
         switch self {
@@ -19,16 +21,18 @@ enum SourceID: String, CaseIterable, Identifiable, Sendable {
         case .librivox: "LibriVox"
         case .beq: "BEQ · Québec"
         case .pepper: "Pepper&Carrot"
+        case .local: "mKOBO"
         }
     }
-    var kinds: [Kind] { switch self { case .gutenberg, .wikisource: [.book]; case .archive: [.book, .comic]; case .librivox: [.audio]; case .beq: [.book]; case .pepper: [.comic] } }
+    var kinds: [Kind] { switch self { case .gutenberg, .wikisource: [.book]; case .archive: [.book, .comic]; case .librivox: [.audio]; case .beq: [.book]; case .pepper: [.comic]; case .local: [.book, .comic] } }
     var home: URL { switch self {
         case .gutenberg: URL(string: "https://www.gutenberg.org")!
         case .wikisource: URL(string: "https://wikisource.org")!
         case .archive: URL(string: "https://archive.org")!
         case .librivox: URL(string: "https://librivox.org")!
         case .beq: URL(string: "https://beq.ebooksgratuits.com")!
-        case .pepper: URL(string: "https://www.peppercarrot.com")! } }
+        case .pepper: URL(string: "https://www.peppercarrot.com")!
+        case .local: URL(string: "https://github.com/starbudweiser/mKOBO")! } }
 }
 
 /// Fichier téléchargeable d'un livre.

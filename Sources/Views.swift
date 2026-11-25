@@ -28,6 +28,18 @@ struct RootView: View {
             .padding(.top, 6)
         }
         .ignoresSafeArea(.container, edges: .top)
+        .overlay {
+            GeometryReader { g in
+                ZStack(alignment: .bottom) {
+                    if store.showBrowser {
+                        StoreDrawer(browser: store.browser).frame(height: max(320, g.size.height * 0.82)).transition(.move(edge: .bottom))
+                    } else if !store.browser.url.isEmpty {
+                        StoreDrawerTab().transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            }
+        }
         .background(alignment: .top) { WindowDragArea().frame(height: 48).ignoresSafeArea() }
         .background(Theme.chat.ignoresSafeArea())
         .background(WindowGrabber())
@@ -144,11 +156,11 @@ struct Sidebar: View {
                 }
                 if !compact {
                     section(L.t("side.sources")) {
-                        VStack(spacing: 0) { ForEach(SourceID.allCases) { sourceRow($0) } }.padding(6).surface(radius: M.radius, fill: Theme.solid)
+                        VStack(spacing: 0) { ForEach(SourceID.catalog) { sourceRow($0) } }.padding(6).surface(radius: M.radius, fill: Theme.solid)
                     }
                     section(L.t("side.stores")) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Button { Store.openKoboStore(store.query) } label: {
+                            Button { store.openKoboStore() } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: "bag").font(.system(size: 12, weight: .semibold))
                                     Text(L.t("store.kobo")).font(.system(size: 12.5, weight: .medium)).lineLimit(1)

@@ -27,6 +27,8 @@ final class Store: ObservableObject {
     @Published var screen: Screen = .discover
     @Published var jobs: [Job] = []
     @Published var showJobs = false
+    @Published var showBrowser = false
+    let browser = KoboBrowser()
     var runner: Task<Void, Never>?
 
     private var raw: [SourceID: [Book]] = [:]
@@ -95,13 +97,28 @@ final class Store: ObservableObject {
         books = out
     }
 
-    /// Boutique officielle Kobo (Rakuten) : recherche ouverte dans le navigateur, où l'utilisateur est connecté à son compte.
-    static func openKoboStore(_ query: String) {
+    /// Boutique officielle Kobo (Rakuten) dans le tiroir de l'appli : la recherche en cours est reprise, la session reste ouverte.
+    func openKoboStore() {
         let region = ["fr": "fr/fr", "en": "us/en", "es": "es/es", "it": "it/it"][L.code] ?? "us/en"
         var c = URLComponents(string: "https://www.kobo.com/\(region)/search")!
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if !q.isEmpty { c.queryItems = [URLQueryItem(name: "query", value: q)] }
-        if let u = c.url { NSWorkspace.shared.open(u) }
+        if let u = c.url?.absoluteString, browser.url.isEmpty || !q.isEmpty || !showBrowser { browser.load(u) }
+        withAnimation(StoreDrawer.open) { showBrowser = true }
+    }
+
+    /// Formats qu'on peut envoyer sur la liseuse depuis un fichier téléchargé.
+    static let sendableExts: Set<String> = ["epub", "kepub", "cbz", "cbr", "pdf"]
+
+    /// Envoie un fichier téléchargé depuis la boutique vers la Kobo (ou le dossier Drive si la liseuse est absente).
+    func sendLocal(_ file: URL) {
+        let ext = file.pathExtension.lowercased()
+        let isComic = ["cbz", "cbr"].contains(ext)
+        let book = Book(id: "local:" + file.lastPathComponent, title: file.deletingPathExtension().lastPathComponent, author: "", kind: isComic ? .comic : .book,
+                        language: "", summary: "", source: .local, coverURL: nil, pageURL: nil,
+                        files: [FileOption(format: ext.uppercased(), ext: ext, url: file, size: nil)], popularity: 0)
+        selection[book.id] = book
+        send(to: DeviceMonitor.shared.device != nil ? .kobo : .drive)
     }
 
     func toggle(_ b: Book) { if selection[b.id] != nil { selection[b.id] = nil } else { selection[b.id] = b } }
