@@ -93,6 +93,13 @@ enum SelfTest {
                     try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path)); print("capture : \(path)"); exit(0)
                 }
             }
+            if arg("--hit") != nil, let w = AppDelegate.shared?.window, let root = w.contentView?.superview {
+                let pt = NSPoint(x: Double(arg("--hit") ?? "300") ?? 300, y: w.frame.height - 24)
+                var v = root.hitTest(pt)
+                var chain: [String] = []
+                while let c = v { chain.append("\(type(of: c))[\(c.mouseDownCanMoveWindow ? "déplace" : "ne déplace pas")]"); v = c.superview }
+                print("clic dans le champ de recherche → \(chain.prefix(6).joined(separator: " < ")) · fenêtre movableByBackground=\(w.isMovableByWindowBackground)")
+            }
             guard let view = AppDelegate.shared?.window?.contentView?.superview ?? AppDelegate.shared?.window?.contentView,
                   let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { print("capture impossible"); exit(1) }
             view.cacheDisplay(in: view.bounds, to: rep)

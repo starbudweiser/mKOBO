@@ -28,6 +28,7 @@ struct RootView: View {
             .padding(.top, 6)
         }
         .ignoresSafeArea(.container, edges: .top)
+        .background(alignment: .top) { WindowDragArea().frame(height: 48).ignoresSafeArea() }
         .background(Theme.chat.ignoresSafeArea())
         .background(WindowGrabber())
         .frame(minWidth: 600, minHeight: 540)
@@ -52,6 +53,7 @@ struct WindowGrabber: NSViewRepresentable {
             w.titleVisibility = .hidden
             w.styleMask.insert(.fullSizeContentView)
             w.isMovableByWindowBackground = false
+            w.isMovable = false   // déplacement uniquement par WindowDragArea (barre du haut)
             w.backgroundColor = Theme.ns(0x131316, 0xf5f5f7)
             AppDelegate.shared?.window = w
             if !Self.centered { Self.centered = true; w.socleCenter() }
@@ -59,6 +61,18 @@ struct WindowGrabber: NSViewRepresentable {
         return v
     }
     func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+/// Seule zone qui déplace la fenêtre : le fond de la barre du haut (double-clic = agrandir). La fenêtre n'est pas déplaçable ailleurs,
+/// sinon glisser dans le champ de recherche (sous la barre de titre transparente) déplaçait la fenêtre au lieu de sélectionner le texte.
+struct WindowDragArea: View {
+    var body: some View {
+        Color.clear.contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 1).onChanged { _ in
+                if let e = NSApp.currentEvent, e.type == .leftMouseDragged || e.type == .leftMouseDown { e.window?.performDrag(with: e) }
+            })
+            .onTapGesture(count: 2) { NSApp.keyWindow?.performZoom(nil) }
+    }
 }
 
 // MARK: Barre du haut
