@@ -41,7 +41,7 @@ protocol SourceProvider: Sendable {
 extension SourceProvider { func files(for book: Book) async throws -> [FileOption] { book.files } }
 
 enum Providers {
-    static let all: [SourceProvider] = [GutenbergProvider(), WikisourceProvider(), ArchiveProvider(), LibriVoxProvider()]
+    static let all: [SourceProvider] = [GutenbergProvider(), WikisourceProvider(), ArchiveProvider(), LibriVoxProvider(), BEQProvider()]
     static func provider(_ id: SourceID) -> SourceProvider { all.first { $0.id == id }! }
 }
 
@@ -211,6 +211,78 @@ struct LibriVoxProvider: SourceProvider {
                         source: .librivox, coverURL: ia.isEmpty ? nil : URL(string: "https://archive.org/services/img/\(ia)"),
                         pageURL: URL(string: str(b["url_librivox"])), files: [FileOption(format: "MP3", ext: "zip", url: zip, size: nil)],
                         popularity: 0, duration: str(b["totaltime"]))
+        }
+    }
+}
+
+
+// MARK: Bibliothèque électronique du Québec (collection « À tous les vents », EPUB du domaine public, en français)
+// Pas d'API : l'index du site (une page HTML) est lu, converti en liste et gardé une semaine dans les caches ; la recherche se fait en local.
+
+struct BEQProvider: SourceProvider {
+    let id = SourceID.beq
+    private static let base = "https://beq.ebooksgratuits.com/"
+    fileprivate struct Entry: Codable { var title: String, author: String, file: String }
+
+    private static var cacheURL: URL { FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("beq-index.json") }
+
+    private static func decodeEntities(_ s: String) -> String {
+        var out = s.replacingOccurrences(of: "&nbsp;", with: " ").replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<").replacingOccurrences(of: "&gt;", with: ">").replacingOccurrences(of: "&quot;", with: "\"")
+        if let re = try? NSRegularExpression(pattern: "&#(\\d+);") {
+            for m in re.matches(in: out, range: NSRange(out.startIndex..., in: out)).reversed() {
+                if let r = Range(m.range, in: out), let n = Range(m.range(at: 1), in: out), let code = UInt32(out[n]), let u = Unicode.Scalar(code) { out.replaceSubrange(r, with: String(Character(u))) }
+            }
+        }
+        return out
+    }
+
+    fileprivate static func parse(_ html: String) -> [Entry] {
+        var author = ""
+        var out: [Entry] = []
+        let epub = try? NSRegularExpression(pattern: #"href="\.\./vents-epub/([^"]+\.epub)""#)
+        for chunk in html.components(separatedBy: "<p ").dropFirst() {
+            if let m = epub?.firstMatch(in: chunk, range: NSRange(chunk.startIndex..., in: chunk)), let fr = Range(m.range(at: 1), in: chunk) {
+                // titre = texte qui suit la dernière image d'icône du paragraphe
+                let tail = chunk.components(separatedBy: "</a>").last ?? ""
+                var title = decodeEntities(stripHTML(tail)).replacingOccurrences(of: "♥", with: "").trimmingCharacters(in: CharacterSet(charactersIn: " .\u{00A0}"))
+                if let r = title.range(of: ", par ") { title = String(title[..<r.lowerBound]) }
+                if !title.isEmpty { out.append(Entry(title: title, author: author, file: String(chunk[fr]))) }
+            } else if let b = chunk.range(of: "<b>"), let e = chunk.range(of: "</b>", range: b.upperBound..<chunk.endIndex) {
+                let head = decodeEntities(stripHTML(String(chunk[b.upperBound..<e.lowerBound])))
+                if let colon = head.range(of: " :") { author = naturalName(String(head[..<colon.lowerBound]).trimmingCharacters(in: .whitespaces)) }
+            }
+        }
+        return out
+    }
+
+    private func index() async throws -> [Entry] {
+        let cache = Self.cacheURL
+        if let a = try? FileManager.default.attributesOfItem(atPath: cache.path), let d = a[.modificationDate] as? Date, Date().timeIntervalSince(d) < 7 * 86400,
+           let data = try? Data(contentsOf: cache), let list = try? JSONDecoder().decode([Entry].self, from: data), !list.isEmpty { return list }
+        let (data, resp) = try await Net.session.data(from: URL(string: Self.base + "vents/index.htm")!)
+        if let code = (resp as? HTTPURLResponse)?.statusCode, code != 200 { throw NetError.http(code) }
+        let html = String(data: data, encoding: .windowsCP1252) ?? String(decoding: data, as: UTF8.self)
+        let list = Self.parse(html)
+        guard !list.isEmpty else { throw NetError.format }
+        try? JSONEncoder().encode(list).write(to: cache)
+        return list
+    }
+
+    func search(query: String, langs: Set<String>, kind: Kind?, page: Int) async throws -> [Book] {
+        if let k = kind, k != .book { return [] }
+        if !langs.isEmpty && !langs.contains("fr") { return [] }   // collection entièrement en français
+        func fold(_ s: String) -> String { s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil) }
+        let words = fold(query).split(separator: " ").map(String.init)
+        let hits = try await index().filter { e in
+            let hay = fold(e.title + " " + e.author)
+            return words.allSatisfy { hay.contains($0) }
+        }
+        let slice = hits.dropFirst((page - 1) * 40).prefix(40)
+        return slice.compactMap { e in
+            guard let u = URL(string: Self.base + "vents-epub/" + (e.file.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? e.file)) else { return nil }
+            return Book(id: "beq:" + e.file, title: e.title, author: e.author, kind: .book, language: "fr", summary: "", source: .beq, coverURL: nil,
+                        pageURL: URL(string: Self.base + "vents/index.htm"), files: [FileOption(format: "EPUB", ext: "epub", url: u, size: nil)], popularity: 0)
         }
     }
 }

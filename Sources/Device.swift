@@ -13,8 +13,17 @@ enum Prefs {
     static var theme: String { get { d.string(forKey: "theme") ?? "auto" } set { d.set(newValue, forKey: "theme") } }
     static var viewMode: String { get { d.string(forKey: "viewMode") ?? "grid" } set { d.set(newValue, forKey: "viewMode") } }
     static var sources: Set<SourceID> {
-        get { (d.string(forKey: "sources")).map { Set($0.split(separator: ",").compactMap { SourceID(rawValue: String($0)) }) } ?? Set(SourceID.allCases) }
-        set { d.set(newValue.map(\.rawValue).sorted().joined(separator: ","), forKey: "sources") }
+        // une source ajoutée dans une version plus récente est activée d'office (« sourcesSeen » = sources déjà connues de l'utilisateur)
+        get {
+            let seen = Set((d.string(forKey: "sourcesSeen") ?? d.string(forKey: "sources") ?? "").split(separator: ",").map(String.init))
+            let fresh = Set(SourceID.allCases.filter { !seen.contains($0.rawValue) })
+            guard let saved = d.string(forKey: "sources") else { return Set(SourceID.allCases) }
+            return Set(saved.split(separator: ",").compactMap { SourceID(rawValue: String($0)) }).union(fresh)
+        }
+        set {
+            d.set(newValue.map(\.rawValue).sorted().joined(separator: ","), forKey: "sources")
+            d.set(SourceID.allCases.map(\.rawValue).joined(separator: ","), forKey: "sourcesSeen")
+        }
     }
     static var langs: Set<String> {
         get { (d.string(forKey: "langs")).map { Set($0.split(separator: ",").map(String.init)) } ?? ["fr", "en"] }

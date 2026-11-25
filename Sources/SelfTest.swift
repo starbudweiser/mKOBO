@@ -36,8 +36,13 @@ enum SelfTest {
 
     /// Envoi complet vers un dossier temporaire jouant le rôle du dossier Google Drive : recherche, téléchargement, copie, contrôle.
     static func runSend() async {
-        for src in [SourceID.gutenberg, .archive, .librivox] {
+        for src in [SourceID.gutenberg, .archive, .librivox, .beq] {
             let r = (try? await Providers.provider(src).search(query: "", langs: ["fr"], kind: nil, page: 2)) ?? []
+            if src == .beq {
+                let a = (try? await Providers.provider(.beq).search(query: "", langs: ["fr"], kind: nil, page: 1)) ?? []
+                let b = (try? await Providers.provider(.beq).search(query: "dumas", langs: ["fr"], kind: nil, page: 1)) ?? []
+                print("[beq] accueil \(a.count), « dumas » \(b.count) — ex. : \(b.first.map { "\($0.title) / \($0.author)" } ?? "-")")
+            }
             print("[\(src.rawValue)] page 2 (fr) : \(r.count) résultats — \(r.first?.title ?? "-")")
         }
         let drive = FileManager.default.temporaryDirectory.appendingPathComponent("mkobo-test-drive-\(UUID().uuidString.prefix(6))")

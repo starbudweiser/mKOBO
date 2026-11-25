@@ -9,7 +9,7 @@ enum Kind: String, CaseIterable, Identifiable, Sendable {
 }
 
 enum SourceID: String, CaseIterable, Identifiable, Sendable {
-    case gutenberg, wikisource, archive, librivox
+    case gutenberg, wikisource, archive, librivox, beq
     var id: String { rawValue }
     var name: String {
         switch self {
@@ -17,14 +17,16 @@ enum SourceID: String, CaseIterable, Identifiable, Sendable {
         case .wikisource: "Wikisource"
         case .archive: "Internet Archive"
         case .librivox: "LibriVox"
+        case .beq: "Bibliothèque électronique du Québec"
         }
     }
-    var kinds: [Kind] { switch self { case .gutenberg, .wikisource: [.book]; case .archive: [.book, .comic]; case .librivox: [.audio] } }
+    var kinds: [Kind] { switch self { case .gutenberg, .wikisource: [.book]; case .archive: [.book, .comic]; case .librivox: [.audio]; case .beq: [.book] } }
     var home: URL { switch self {
         case .gutenberg: URL(string: "https://www.gutenberg.org")!
         case .wikisource: URL(string: "https://wikisource.org")!
         case .archive: URL(string: "https://archive.org")!
-        case .librivox: URL(string: "https://librivox.org")! } }
+        case .librivox: URL(string: "https://librivox.org")!
+        case .beq: URL(string: "https://beq.ebooksgratuits.com")! } }
 }
 
 /// Fichier téléchargeable d'un livre.
