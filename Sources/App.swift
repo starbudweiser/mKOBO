@@ -49,28 +49,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor func showSettings() {
         if settingsWindow == nil {
-            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 640), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 720), styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
             w.isReleasedWhenClosed = false
             w.title = L.t("settings.title")
+            w.titlebarAppearsTransparent = true
+            w.backgroundColor = Theme.ns(0x131316, 0xf5f5f7)
             w.contentView = NSHostingView(rootView: SettingsView())
-            w.center()
             settingsWindow = w
         }
-        settingsWindow?.present()
+        recenterOnOpen(settingsWindow)      // règle Socle : fenêtre secondaire centrée sur la fenêtre de l'appli, à chaque ouverture
     }
 
     @MainActor func showAbout() {
         if aboutWindow == nil {
-            let w = NSWindow(contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            let w = NSWindow(contentRect: .zero, styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
             w.isReleasedWhenClosed = false
             w.title = L.t("about.menu")
+            w.titlebarAppearsTransparent = true
+            w.backgroundColor = Theme.ns(0x131316, 0xf5f5f7)
             let host = NSHostingView(rootView: AboutView())
             w.contentView = host
             w.setContentSize(host.fittingSize)
-            w.center()
             aboutWindow = w
         }
-        aboutWindow?.present()
+        recenterOnOpen(aboutWindow)
+    }
+
+    /// Centre la fenêtre secondaire avant son affichage, puis une seconde fois quand sa taille définitive est connue (la vue SwiftUI la ajuste à l'ouverture).
+    @MainActor private func recenterOnOpen(_ w: NSWindow?) {
+        guard let w else { return }
+        w.layoutIfNeeded()
+        w.updaterCenter()
+        w.present()
+        for delay in [0.0, 0.15] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { MainActor.assumeIsolated { w.updaterCenter() } }
+        }
     }
 
     /// Choix du dossier Google Drive (dossier synchronisé). `completion(true)` si un dossier a été choisi.

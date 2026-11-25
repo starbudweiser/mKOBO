@@ -2,6 +2,24 @@
 import AppKit
 import SwiftUI
 
+/// Choix à pastilles (thème, présence) : capsule de fond, choix actif sur la carte de contenu.
+struct PillPicker<T: Hashable>: View {
+    @Binding var selection: T
+    var options: [(T, String)]
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(options, id: \.0) { value, title in
+                let on = selection == value
+                Button { selection = value } label: {
+                    Text(title).font(.system(size: 12.5, weight: on ? .semibold : .regular)).lineLimit(1)
+                        .padding(.horizontal, 14).frame(height: 26)
+                        .background(Capsule().fill(on ? Theme.win : .clear).shadow(color: .black.opacity(on ? 0.12 : 0), radius: 1.5, y: 1))
+                }.buttonStyle(.plain)
+            }
+        }.padding(3).background(Capsule().fill(Theme.fill))
+    }
+}
+
 struct SettingsView: View {
     @AppStorage("theme") private var theme = "auto"
     @AppStorage("iconMode") private var iconMode = "dock"
@@ -14,40 +32,69 @@ struct SettingsView: View {
     @State private var drivePath = Prefs.drivePath
 
     var body: some View {
-        Form {
-            Section(L.t("settings.appearance")) {
-                Picker(L.t("settings.theme"), selection: $theme) {
-                    Text(L.t("settings.theme.auto")).tag("auto"); Text(L.t("settings.theme.light")).tag("light"); Text(L.t("settings.theme.dark")).tag("dark")
-                }.pickerStyle(.segmented).onChange(of: theme) { _, _ in Prefs.applyTheme() }
-                Picker(L.t("settings.icon"), selection: $iconMode) {
-                    ForEach(IconMode.allCases) { Text($0.label).tag($0.rawValue) }
-                }.pickerStyle(.segmented).onChange(of: iconMode) { _, v in Presence.shared.set(IconMode(rawValue: v) ?? .dock) }
-            }
-            Section(L.t("settings.kobo")) {
-                TextField(L.t("settings.koboFolder"), text: $koboFolder)
-                Toggle(L.t("settings.classify"), isOn: $classify)
-                Toggle(L.t("settings.nameAuthor"), isOn: $nameAuthor)
-                Toggle(L.t("settings.kepub"), isOn: $kepub).disabled(Kepubify.path == nil)
-                if Kepubify.path == nil { Text(L.t("settings.kepubMissing")).font(.caption).foregroundStyle(.secondary) }
-                Toggle(L.t("settings.eject"), isOn: $eject)
-            }
-            Section(L.t("settings.drive")) {
-                LabeledContent(L.t("settings.driveFolder")) {
-                    HStack {
-                        Text(drivePath ?? L.t("settings.none")).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
-                        Button(L.t("settings.choose")) { AppDelegate.shared?.chooseDriveFolder { _ in drivePath = Prefs.drivePath } }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                group(L.t("settings.appearance")) {
+                    row(L.t("settings.theme")) {
+                        PillPicker(selection: $theme, options: [("auto", L.t("settings.theme.auto")), ("light", L.t("settings.theme.light")), ("dark", L.t("settings.theme.dark"))])
+                            .onChange(of: theme) { _, _ in Prefs.applyTheme() }
+                    }
+                    row(L.t("settings.icon")) {
+                        PillPicker(selection: $iconMode, options: IconMode.allCases.map { ($0.rawValue, $0.label) })
+                            .onChange(of: iconMode) { _, v in Presence.shared.set(IconMode(rawValue: v) ?? .dock) }
                     }
                 }
-                Text(L.t("settings.driveHelp")).font(.caption).foregroundStyle(.secondary)
+                group(L.t("settings.kobo")) {
+                    row(L.t("settings.koboFolder")) {
+                        TextField("mKOBO", text: $koboFolder).textFieldStyle(.plain).multilineTextAlignment(.trailing)
+                            .padding(.horizontal, 12).frame(width: 190, height: 28).background(Capsule().fill(Theme.fill))
+                    }
+                    row(L.t("settings.classify")) { Toggle("", isOn: $classify).labelsHidden().toggleStyle(.switch) }
+                    row(L.t("settings.nameAuthor")) { Toggle("", isOn: $nameAuthor).labelsHidden().toggleStyle(.switch) }
+                    row(L.t("settings.kepub"), note: Kepubify.path == nil ? L.t("settings.kepubMissing") : nil) {
+                        Toggle("", isOn: Kepubify.path == nil ? .constant(false) : $kepub).labelsHidden().toggleStyle(.switch).disabled(Kepubify.path == nil)
+                    }
+                    row(L.t("settings.eject")) { Toggle("", isOn: $eject).labelsHidden().toggleStyle(.switch) }
+                }
+                group(L.t("settings.drive")) {
+                    row(L.t("settings.driveFolder"), note: L.t("settings.driveHelp")) {
+                        HStack(spacing: 8) {
+                            Text(drivePath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? L.t("settings.none")).font(.system(size: 12.5)).foregroundStyle(Theme.text2)
+                                .lineLimit(1).truncationMode(.middle).frame(maxWidth: 170, alignment: .trailing).help(drivePath ?? "")
+                            Button(L.t("settings.choose")) { AppDelegate.shared?.chooseDriveFolder { _ in drivePath = Prefs.drivePath } }.buttonStyle(PillButtonStyle(height: 28))
+                        }
+                    }
+                }
+                group(L.t("settings.updates")) {
+                    row(L.t("settings.autoUpdate")) { Toggle("", isOn: $autoUpdate).labelsHidden().toggleStyle(.switch) }
+                    row(L.t("settings.updateNow")) { Button(L.t("settings.updateNow")) { UpdateEngine.shared.checkNow() }.buttonStyle(PillButtonStyle(height: 28)) }
+                }
             }
-            Section(L.t("settings.updates")) {
-                Toggle(L.t("settings.autoUpdate"), isOn: $autoUpdate)
-                Button(L.t("settings.updateNow")) { UpdateEngine.shared.checkNow() }
-            }
+            .padding(.horizontal, 22).padding(.top, 44).padding(.bottom, 22)
         }
-        .formStyle(.grouped)
-        .frame(width: 560, height: 640)
+        .frame(width: 560, height: 720)
+        .background(Theme.chat)
         .onReceive(NotificationCenter.default.publisher(for: .driveFolderChanged)) { _ in drivePath = Prefs.drivePath }
+    }
+
+    private func group<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased()).font(.system(size: 10.5, weight: .semibold)).tracking(0.4).foregroundStyle(Theme.text2).padding(.leading, 6)
+            VStack(spacing: 0) { content() }.padding(.horizontal, 14).surface(radius: M.radius, fill: Theme.win)
+        }
+    }
+
+    private func row<C: View>(_ title: String, note: String? = nil, @ViewBuilder _ control: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 12) {
+                Text(title).font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 12)
+                control()
+            }
+            if let note { Text(note).font(.system(size: 11.5)).foregroundStyle(Theme.text2).fixedSize(horizontal: false, vertical: true) }
+        }
+        .padding(.vertical, 10).frame(minHeight: 44)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.sep).frame(height: 0.5) }
     }
 }
 
@@ -65,6 +112,6 @@ struct AboutView: View {
             Text(L.t("about.collection")).font(.system(size: 11)).foregroundStyle(.secondary)
             Link("♥ " + L.t("about.support"), destination: URL(string: "https://github.com/sponsors/starbudweiser")!).font(.system(size: 12, weight: .medium))
         }
-        .frame(width: 330).padding(.horizontal, 28).padding(.top, 34).padding(.bottom, 26)
+        .frame(width: 330).padding(.horizontal, 28).padding(.top, 34).padding(.bottom, 26).background(Theme.chat)
     }
 }

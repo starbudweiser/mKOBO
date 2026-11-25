@@ -41,7 +41,9 @@ struct RootView: View {
 }
 
 /// Donne à l'AppDelegate la fenêtre principale (barre de titre transparente, fond de l'appli).
+/// Règle Socle « Lancement centré » : au lancement, centrée sur l'écran du pointeur ; la position de la session précédente n'est jamais restaurée.
 struct WindowGrabber: NSViewRepresentable {
+    private static var centered = false
     func makeNSView(context: Context) -> NSView {
         let v = NSView()
         DispatchQueue.main.async {
@@ -52,6 +54,7 @@ struct WindowGrabber: NSViewRepresentable {
             w.isMovableByWindowBackground = false
             w.backgroundColor = Theme.ns(0x131316, 0xf5f5f7)
             AppDelegate.shared?.window = w
+            if !Self.centered { Self.centered = true; w.socleCenter() }
         }
         return v
     }

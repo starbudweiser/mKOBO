@@ -66,6 +66,19 @@ enum SelfTest {
             if let n = arg("--select").flatMap(Int.init) { for b in store.books.prefix(n) { store.selection[b.id] = b } }
             if CommandLine.arguments.contains("--inspect") { store.inspected = store.visible.first }
             try? await Task.sleep(nanoseconds: 3_500_000_000)
+            if let w = arg("--window") {
+                if w == "settings" { AppDelegate.shared?.showSettings() } else { AppDelegate.shared?.showAbout() }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                let win = NSApp.windows.first { $0.title == (w == "settings" ? L.t("settings.title") : L.t("about.menu")) }
+                if let m = AppDelegate.shared?.window, let win {
+                    let scr = m.screen?.visibleFrame ?? .zero
+                    print("centrage : fenêtre principale écart au centre de l'écran = (\(Int(m.frame.midX - scr.midX)), \(Int(m.frame.midY - scr.midY))) · fenêtre secondaire écart au centre de la fenêtre principale = (\(Int(win.frame.midX - m.frame.midX)), \(Int(win.frame.midY - m.frame.midY)))")
+                }
+                if let v = win?.contentView, let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) {
+                    v.cacheDisplay(in: v.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path)); print("capture : \(path)"); exit(0)
+                }
+            }
             guard let view = AppDelegate.shared?.window?.contentView?.superview ?? AppDelegate.shared?.window?.contentView,
                   let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { print("capture impossible"); exit(1) }
             view.cacheDisplay(in: view.bounds, to: rep)
