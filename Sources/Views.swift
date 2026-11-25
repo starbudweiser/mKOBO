@@ -268,12 +268,12 @@ struct DiscoverView: View {
             Button { store.langs = [] } label: { if store.langs.isEmpty { Label(L.t("lang.all"), systemImage: "checkmark") } else { Text(L.t("lang.all")) } }
             Divider()
             ForEach(["fr", "en", "es", "it"], id: \.self) { code in
-                Button { store.toggleLang(code) } label: { if store.langs.contains(code) { Label(L.t("lang." + code), systemImage: "checkmark") } else { Text(L.t("lang." + code)) } }
+                Button { store.langs = [code] } label: { if store.langs.contains(code) { Label(L.t("lang." + code), systemImage: "checkmark") } else { Text(L.t("lang." + code)) } }
             }
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "globe").font(.system(size: 12))
-                Text(store.langs.isEmpty ? L.t("lang.all") : store.langs.sorted().map { $0.uppercased() }.joined(separator: " · ")).font(.system(size: 12.5, weight: .medium))
+                Text(store.langs.isEmpty ? L.t("lang.all") : ["fr", "en", "es", "it"].filter { store.langs.contains($0) }.map { $0.uppercased() }.joined(separator: " · ")).font(.system(size: 12.5, weight: .medium))
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(Theme.text2)
             }
             .padding(.horizontal, 12).frame(height: 30).background(Capsule().fill(Theme.fill))
