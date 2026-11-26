@@ -107,6 +107,8 @@ final class Store: ObservableObject {
         withAnimation(StoreDrawer.open) { showBrowser = true }
     }
 
+    static var canTranslate: Bool { if #available(macOS 15.0, *) { return true } else { return false } }
+
     /// Formats qu'on peut envoyer sur la liseuse depuis un fichier téléchargé.
     static let sendableExts: Set<String> = ["epub", "kepub", "cbz", "cbr", "pdf"]
 

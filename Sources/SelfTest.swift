@@ -85,8 +85,9 @@ enum SelfTest {
                 let t = try? await store.browser.webView.evaluateJavaScript("document.title + ' | ' + document.body.innerText.slice(0, 160).replace(/\\s+/g, ' ')")
                 print("boutique : \(store.browser.url) → \(t ?? "?")")
             }
+            if CommandLine.arguments.contains("--inspect-en") { store.inspected = store.visible.first { $0.summary.count > 80 && $0.language == "en" } }
             if CommandLine.arguments.contains("--inspect") { store.inspected = store.visible.first }
-            try? await Task.sleep(nanoseconds: 3_500_000_000)
+            try? await Task.sleep(nanoseconds: CommandLine.arguments.contains("--inspect-en") ? 12_000_000_000 : 3_500_000_000)
             if let w = arg("--window") {
                 if w == "settings" { AppDelegate.shared?.showSettings() } else { AppDelegate.shared?.showAbout() }
                 try? await Task.sleep(nanoseconds: 1_500_000_000)

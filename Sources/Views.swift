@@ -1,6 +1,8 @@
 // mKOBO — interface Flat Round Design : barre du haut, panneau latéral, galerie (vignettes / liste), barre d'envoi, fiche, envois, liseuse.
 import AppKit
+import NaturalLanguage
 import SwiftUI
+import Translation
 
 struct RootView: View {
     @ObservedObject var store = Store.shared
@@ -577,7 +579,7 @@ struct Inspector: View {
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    if !b.summary.isEmpty { Text(b.summary).font(.system(size: 12.5)).foregroundStyle(Theme.text2).lineSpacing(2).fixedSize(horizontal: false, vertical: true) }
+                    if !b.summary.isEmpty { SummaryText(text: b.summary).id(b.id) }
                     VStack(alignment: .leading, spacing: 6) {
                         header(L.t("fiche.files"))
                         if b.files.isEmpty { HStack { ProgressView().controlSize(.small); Text(L.t("empty.loading")).font(.system(size: 12)).foregroundStyle(Theme.text2) } }
@@ -740,5 +742,69 @@ struct DeviceView: View {
                 if files.isEmpty { Text(L.t("device.empty")).font(.system(size: 12)).foregroundStyle(Theme.text2).padding(12) }
             }.surface(radius: M.radius, fill: Theme.solid)
         }
+    }
+}
+
+
+// MARK: Résumé traduit (traduction intégrée de macOS, locale et gratuite)
+
+/// Résumé d'un livre : si sa langue n'est pas celle de l'appli, il est traduit par macOS (macOS 15 ou plus), avec retour à l'original.
+struct SummaryText: View {
+    let text: String
+    @State private var translated: String?
+    @State private var showOriginal = false
+    @State private var failed = false
+
+    private var source: String? {
+        let r = NLLanguageRecognizer(); r.processString(text)
+        return r.dominantLanguage?.rawValue.components(separatedBy: "-").first
+    }
+    private var needsTranslation: Bool { source != nil && source != L.code && Store.canTranslate }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(showOriginal || translated == nil ? text : translated!)
+                .font(.system(size: 12.5)).foregroundStyle(Theme.text2).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+                .modifier(TranslateModifier(text: text, source: needsTranslation ? source : nil, target: L.code) { translated = $0 } failed: { failed = true })
+            if translated != nil {
+                Button { showOriginal.toggle() } label: {
+                    Text(showOriginal ? L.t("summary.showTranslated") : L.t("summary.translated")).font(.system(size: 11)).foregroundStyle(Theme.text3)
+                }.buttonStyle(.plain)
+            } else if needsTranslation && !failed {
+                Text(L.t("summary.translating")).font(.system(size: 11)).foregroundStyle(Theme.text3)
+            }
+        }
+    }
+}
+
+/// Branche la traduction de macOS 15+ ; sur un système plus ancien, le texte reste en version originale.
+struct TranslateModifier: ViewModifier {
+    let text: String, source: String?, target: String
+    let done: (String) -> Void
+    let failed: () -> Void
+
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.modifier(TranslateModifier15(text: text, source: source, target: target, done: done, failed: failed))
+        } else { content }
+    }
+}
+
+@available(macOS 15.0, *)
+struct TranslateModifier15: ViewModifier {
+    let text: String, source: String?, target: String
+    let done: (String) -> Void
+    let failed: () -> Void
+    @State private var config: TranslationSession.Configuration?
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                guard let source else { return }
+                config = TranslationSession.Configuration(source: Locale.Language(identifier: source), target: Locale.Language(identifier: target))
+            }
+            .translationTask(config) { session in
+                do { done(try await session.translate(text).targetText) } catch { failed() }
+            }
     }
 }
